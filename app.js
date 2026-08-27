@@ -13,7 +13,7 @@ let timerInt = null;
 
 /* ---------- GitHub API ---------- */
 async function gh(path, opts = {}, raw = false) {
-  const res = await fetch(`${API}/${path}`, {
+  const res = await fetch(path ? `${API}/${path}` : API, {
     ...opts,
     headers: {
       'Authorization': `Bearer ${token}`,
