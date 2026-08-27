@@ -118,3 +118,10 @@ details.det summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 details.det .media-slot svg { width: 100%; height: auto; border-radius: 10px; margin-top: 8px; }
 #in-num { font-size: 1.4rem; text-align: center; }
 #save-status { margin-top: 10px; font-weight: 600; }
+
+.sec-h { font-weight: 700; margin: 10px 0 4px; font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+ol.how, ul.dos, ul.donts { padding-left: 22px; margin-bottom: 6px; }
+ol.how li, ul.dos li, ul.donts li { margin-bottom: 4px; }
+ul.dos li::marker { content: "\2713  "; color: var(--good); }
+ul.donts li::marker { content: "\2717  "; color: #d33; }
+details.det a.video { display: block; text-align: center; padding: 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); text-decoration: none; color: var(--accent); font-weight: 600; margin-top: 10px; }

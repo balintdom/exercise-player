@@ -193,16 +193,24 @@ function renderWork(entry, m) {
   let det = '';
   const note = m.p.note || m.p['order-note'];
   if (note) det += `<div class="plan-note">${esc(note)}</div>`;
-  if (info && info.notes) det += `<div class="ex-notes">${fmtText(info.notes)}</div>`;
-  if (info && info.personal) det += `<div class="personal"><b>You:</b> ${fmtText(info.personal)}</div>`;
+  if (info) {
+    if (info.personal) det += `<div class="personal"><b>You:</b> ${fmtText(info.personal)}</div>`;
+    const li = (v) => (Array.isArray(v) ? v : [v]).map(x => `<li>${esc(x)}</li>`).join('');
+    if (info.how) det += `<div class="sec-h">How</div><ol class="how">${li(info.how)}</ol>`;
+    if (info.feel) det += `<div class="sec-h">Feel</div><div class="ex-notes">${fmtText(info.feel)}</div>`;
+    if (info.dos) det += `<div class="sec-h">Do</div><ul class="dos">${li(info.dos)}</ul>`;
+    if (info.donts) det += `<div class="sec-h">Don't</div><ul class="donts">${li(info.donts)}</ul>`;
+    if (info.notes) det += `<div class="ex-notes">${fmtText(info.notes)}</div>`;
+    if (info.video && /^https:\/\//.test(String(info.video)))
+      det += `<a class="video" href="${esc(info.video)}" target="_blank" rel="noopener">\u25b6 Watch demo video</a>`;
+  }
   const hasMedia = info && info.media;
   if (det || hasMedia) {
     add(`<details class="det"><summary>Details${hasMedia ? ' & figure' : ''}</summary>${det}<div class="media-slot"></div></details>`);
     if (hasMedia) {
       const mm = String(info.media);
       const slot = card.querySelector('.media-slot');
-      if (/^https?:/.test(mm)) slot.innerHTML = `<a class="video" href="${mm}" target="_blank" rel="noopener">▶ Watch demo video</a>`;
-      else if (mm.endsWith('.svg')) getRaw(`exercises/${mm}`).then(svg => { if (svg) slot.innerHTML = svg; }).catch(() => {});
+      if (mm.endsWith('.svg')) getRaw(`exercises/${mm}`).then(svg => { if (svg) slot.innerHTML = svg; }).catch(() => {});
     }
   }
 
