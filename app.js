@@ -6,9 +6,10 @@ const API = `https://api.github.com/repos/${OWNER}/${REPO}`;
 const $ = (id) => document.getElementById(id);
 const views = ['setup', 'pick', 'player', 'finish'];
 function show(v) { views.forEach(x => $('view-' + x).hidden = (x !== v)); window.scrollTo(0, 0); }
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
 
 let token = localStorage.getItem('gh_token') || '';
-let state = null; // { file, workout, exInfo, results, idx, pain, overall }
+let state = null;
 let timerInt = null;
 
 /* ---------- GitHub API ---------- */
@@ -26,7 +27,7 @@ async function gh(path, opts = {}, raw = false) {
   if (!res.ok) throw new Error(`GitHub ${res.status}: ${(await res.text()).slice(0, 140)}`);
   return raw ? res.text() : res.json();
 }
-const getRaw = (p) => gh(`contents/${encodeURIComponent(p).replace(/%2F/g, '/')}?ref=${BRANCH}`, {}, true);
+const getRaw = (p) => gh(`contents/${p}?ref=${BRANCH}`, {}, true);
 
 async function putFile(path, text, message) {
   const existing = await gh(`contents/${path}?ref=${BRANCH}`);
@@ -44,7 +45,7 @@ $('token-save').onclick = async () => {
   $('setup-error').textContent = '';
   try {
     if (!token) throw new Error('empty token');
-    await gh(''); // repo meta = token works
+    await gh('');
     localStorage.setItem('gh_token', token);
     loadPick();
   } catch (e) { $('setup-error').textContent = 'Token check failed: ' + e.message; }
@@ -84,6 +85,30 @@ async function loadPick() {
   }
 }
 
+/* ---------- units, timers, set counts ---------- */
+function parseMaxSeconds(v) {
+  if (v == null) return 0;
+  const s = String(v);
+  const mul = /min/.test(s) ? 60 : 1;
+  const nums = (s.match(/\d+/g) || []).map(Number);
+  return nums.length ? nums[nums.length - 1] * mul : 0;
+}
+function exMeta(entry) {
+  const p = entry.planned || {};
+  const isDuration = p.duration != null && p.sets == null;
+  const twoSides = isDuration && /side|each/.test(String(p.duration));
+  const nSets = parseInt(p.sets, 10) || (twoSides ? 2 : 1);
+  const hold = /hold/.test(String(p.reps || ''));
+  return {
+    p, isDuration, nSets,
+    setWord: twoSides ? 'Side' : 'Set',
+    unit: (isDuration || hold) ? 'seconds' : 'reps',
+    workSecs: isDuration ? parseMaxSeconds(p.duration) : (hold ? 0 : null),
+    restSecs: parseMaxSeconds(p.rest),
+    target: p.reps != null ? String(p.reps) : (p.duration != null ? String(p.duration) : ''),
+  };
+}
+
 /* ---------- open workout ---------- */
 async function openWorkout(file) {
   $('pick-list').innerHTML = '<p>Loading workout…</p>';
@@ -96,155 +121,167 @@ async function openWorkout(file) {
       catch { exInfo[n] = null; }
     }));
     state = {
-      file, workout, exInfo, idx: 0, pain: 'none', overall: '',
+      file, workout, exInfo, pain: 'none',
+      ei: 0, si: 0, mode: 'work',
       results: (workout.exercises || []).map(e => ({
-        name: e.name, status: null, setsDone: 0, actual: '', comment: '',
+        name: e.name, sets: Array(exMeta(e).nSets).fill(null), comment: '',
       })),
     };
     show('player');
-    renderCard();
+    render();
   } catch (e) { $('pick-list').innerHTML = `<p class="error">${e.message}</p>`; }
 }
 
-/* ---------- player card ---------- */
-function fmtPlanned(p) {
-  if (!p) return [];
-  const chips = [];
-  for (const [k, v] of Object.entries(p)) {
-    if (k === 'note' || k === 'order-note') continue;
-    if (k === 'rest') chips.push(`rest ${esc(v)}s`);
-    else chips.push(`${esc(k)}: ${esc(v)}`);
+/* ---------- flow ---------- */
+function advance() {
+  const { ei, si, mode } = state;
+  const exs = state.workout.exercises;
+  const m = exMeta(exs[ei]);
+  if (mode === 'work') {
+    state.mode = si < m.nSets - 1 ? 'rest' : 'transition';
+  } else if (mode === 'rest') {
+    state.si++; state.mode = 'work';
+  } else { // transition
+    if (ei < exs.length - 1) { state.ei++; state.si = 0; state.mode = 'work'; }
+    else { stopTimer(); show('finish'); return; }
   }
-  return chips;
+  render();
 }
-function parseSeconds(v) {
-  // "150-180" | 120 | "30s/side" | "2-3 min" | "1 min" -> [seconds...]
-  if (v == null) return [];
-  const s = String(v);
-  const mul = /min/.test(s) ? 60 : 1;
-  const nums = (s.match(/\d+/g) || []).map(Number).map(n => n * mul);
-  if (!nums.length) return [];
-  return [...new Set([nums[0], nums[nums.length - 1]])];
+function goBack() {
+  const { ei, si } = state;
+  if (state.mode !== 'work') { state.mode = 'work'; }
+  else if (si > 0) { state.si--; }
+  else if (ei > 0) { state.ei--; state.si = exMeta(state.workout.exercises[ei - 1]).nSets - 1; }
+  render();
 }
 
-function renderCard() {
+function render() {
   stopTimer();
-  const i = state.idx;
-  const entry = state.workout.exercises[i];
-  const res = state.results[i];
+  const exs = state.workout.exercises;
+  const total = exs.length;
+  const { ei, si, mode } = state;
+  const entry = exs[ei];
+  const m = exMeta(entry);
+  $('progress').textContent = `${ei + 1} / ${total}`;
+  $('progress-fill').style.width = `${((ei + (si + 1) / m.nSets) / total) * 100}%`;
+  if (mode === 'work') renderWork(entry, m);
+  else renderRest(entry, m, mode);
+}
+
+function renderWork(entry, m) {
+  const { ei, si } = state;
+  const res = state.results[ei];
   const info = state.exInfo[entry.name];
-  const total = state.workout.exercises.length;
-
-  $('progress').textContent = `${i + 1} / ${total}`;
-  $('progress-fill').style.width = `${((i + 1) / total) * 100}%`;
-  $('btn-prev').disabled = i === 0;
-  $('btn-next').textContent = i === total - 1 ? 'Finish ›' : 'Next ›';
-
-  const p = entry.planned || {};
   const card = $('card');
   card.innerHTML = '';
-  const add = (html) => card.insertAdjacentHTML('beforeend', html);
+  const add = (h) => card.insertAdjacentHTML('beforeend', h);
 
   const phase = entry.phase || 'main';
   add(`<span class="phase-chip ${phase}">${phase}</span>`);
-  add(`<h2 class="ex-title">${entry.name.replace(/-/g, ' ')}</h2>`);
-  add(`<div class="plan-chips">${fmtPlanned(p).map(c => `<span>${c}</span>`).join('')}</div>`);
-  const note = p.note || p['order-note'];
-  if (note) add(`<div class="plan-note">${esc(note)}</div>`);
-  if (info && info.notes) add(`<div class="ex-notes">${esc(info.notes.trim())}</div>`);
-  if (info && info.personal) add(`<div class="personal"><b>You:</b> ${esc(info.personal.trim())}</div>`);
+  add(`<h2 class="ex-title">${esc(entry.name.replace(/-/g, ' '))}</h2>`);
+  add(`<div class="set-line">${m.setWord} <b>${si + 1}</b> / ${m.nSets}` +
+      (m.target ? ` &nbsp;·&nbsp; target: <b>${esc(m.target)}</b>` : '') + `</div>`);
+  const attrs = ['grip', 'depth', 'tempo', 'apparatus'].filter(k => m.p[k]).map(k => `${k}: ${esc(m.p[k])}`);
+  if (attrs.length) add(`<div class="attr-line">${attrs.join(' · ')}</div>`);
 
-  // media
-  if (info && info.media) {
-    const m = String(info.media);
-    if (/^https?:/.test(m)) {
-      add(`<div class="media-box"><a class="video" href="${m}" target="_blank" rel="noopener">▶ Watch demo video</a></div>`);
-    } else if (m.endsWith('.svg')) {
-      const box = document.createElement('div'); box.className = 'media-box';
-      card.appendChild(box);
-      getRaw(`exercises/${m}`).then(svg => { if (svg) box.innerHTML = svg; }).catch(() => {});
+  // collapsed details
+  let det = '';
+  const note = m.p.note || m.p['order-note'];
+  if (note) det += `<div class="plan-note">${esc(note)}</div>`;
+  if (info && info.notes) det += `<div class="ex-notes">${esc(info.notes.trim())}</div>`;
+  if (info && info.personal) det += `<div class="personal"><b>You:</b> ${esc(info.personal.trim())}</div>`;
+  const hasMedia = info && info.media;
+  if (det || hasMedia) {
+    add(`<details class="det"><summary>Details${hasMedia ? ' & figure' : ''}</summary>${det}<div class="media-slot"></div></details>`);
+    if (hasMedia) {
+      const mm = String(info.media);
+      const slot = card.querySelector('.media-slot');
+      if (/^https?:/.test(mm)) slot.innerHTML = `<a class="video" href="${mm}" target="_blank" rel="noopener">▶ Watch demo video</a>`;
+      else if (mm.endsWith('.svg')) getRaw(`exercises/${mm}`).then(svg => { if (svg) slot.innerHTML = svg; }).catch(() => {});
     }
   }
 
-  // sets tracker
-  const nSets = parseInt(p.sets, 10);
-  if (nSets) {
-    const dots = Array.from({ length: nSets }, (_, k) =>
-      `<div class="set-dot ${k < res.setsDone ? 'done' : ''}">${k + 1}</div>`).join('');
-    add(`<div class="sets-box"><div class="sets-dots">${dots}</div>
-      <button id="set-done" class="primary" ${res.setsDone >= nSets ? 'disabled' : ''}>
-        ${res.setsDone >= nSets ? 'All sets done ✓' : `Set ${res.setsDone + 1} done — start rest`}
-      </button></div>`);
-  }
+  // duration work gets its own timer
+  if (m.workSecs) addTimer(card, m.workSecs, false, () => {
+    const inp = $('in-num');
+    if (inp && !inp.value) inp.value = m.workSecs;
+  });
 
-  // timer (rest for set-based, duration otherwise)
-  const secs = parseSeconds(p.rest != null ? p.rest : p.duration);
-  if (secs.length) {
-    const label = p.rest != null ? 'Rest timer' : 'Duration timer';
-    add(`<div class="timer-box"><div class="lbl" style="margin:0 0 4px">${label}</div>
-      <div class="timer-display" id="timer-d">${fmtTime(secs[secs.length - 1])}</div>
+  add(`<input id="in-num" type="number" inputmode="numeric" min="0"
+        placeholder="${m.unit === 'reps' ? 'reps done' : 'seconds held'} — empty = skipped"
+        value="${res.sets[si] != null ? res.sets[si] : ''}">`);
+  add(`<button id="btn-go" class="primary big">Next ›</button>`);
+  $('in-num').oninput = (e) => { res.sets[si] = e.target.value === '' ? null : Number(e.target.value); };
+  $('btn-go').onclick = advance;
+}
+
+function renderRest(entry, m, mode) {
+  const { ei } = state;
+  const card = $('card');
+  card.innerHTML = '';
+  const add = (h) => card.insertAdjacentHTML('beforeend', h);
+
+  const exs = state.workout.exercises;
+  const nextUp = mode === 'rest'
+    ? `${entry.name.replace(/-/g, ' ')} — ${exMeta(entry).setWord.toLowerCase()} ${state.si + 2} / ${m.nSets}`
+    : (ei < exs.length - 1 ? exs[ei + 1].name.replace(/-/g, ' ') : 'finish 🎉');
+
+  add(`<h2 class="ex-title">Rest</h2>`);
+  add(`<div class="set-line">next: <b>${esc(nextUp)}</b></div>`);
+  if (m.restSecs) addTimer(card, m.restSecs, true);
+
+  if (mode === 'transition') {
+    const res = state.results[ei];
+    add(`<label class="lbl">Comment on ${esc(entry.name.replace(/-/g, ' '))} (pain, insight — optional)</label>
+         <textarea id="in-comment" placeholder="e.g. felt it in the elbow / too easy / better setup found...">${esc(res.comment)}</textarea>`);
+    $('in-comment').oninput = (e) => { res.comment = e.target.value; };
+  }
+  add(`<button id="btn-go" class="primary big">Next ›</button>`);
+  $('btn-go').onclick = advance;
+}
+
+/* ---------- timer widget ---------- */
+function addTimer(card, target, autostart, onDone) {
+  card.insertAdjacentHTML('beforeend', `
+    <div class="timer-box">
+      <div class="timer-display" id="timer-d">${fmtTime(target)}</div>
       <div class="timer-btns">
-        ${secs.map(s => `<button class="t-preset" data-s="${s}">${fmtTime(s)}</button>`).join('')}
         <button id="t-start" class="primary">Start</button>
         <button id="t-stop">Stop</button>
-      </div></div>`);
-    let target = secs[secs.length - 1];
-    card.querySelectorAll('.t-preset').forEach(b => b.onclick = () => {
-      target = +b.dataset.s; stopTimer(); $('timer-d').textContent = fmtTime(target);
-    });
-    $('t-start').onclick = () => startTimer(target);
-    $('t-stop').onclick = () => stopTimer();
-    if (nSets) {
-      const sd = $('set-done');
-      if (sd) sd.onclick = () => {
-        res.setsDone++;
-        if (res.setsDone >= nSets && res.status === null) res.status = 'done';
-        renderCard();
-        if (res.setsDone < nSets) startTimer(target);
-      };
-    }
-  } else if (nSets) {
-    const sd = $('set-done');
-    if (sd) sd.onclick = () => {
-      res.setsDone++;
-      if (res.setsDone >= nSets && res.status === null) res.status = 'done';
-      renderCard();
-    };
-  }
-
-  // status + capture
-  add(`<div class="status-row">
-      <button id="st-done" class="done-b ${res.status === 'done' ? 'sel' : ''}">Done ✓</button>
-      <button id="st-skip" class="skip-b ${res.status === 'skipped' ? 'sel' : ''}">Skip</button>
-    </div>
-    <input id="in-actual" placeholder="actual (e.g. 4x2, 25s, only 3 reps last set)" value="${esc(res.actual)}">
-    <textarea id="in-comment" placeholder="comment — anything: too easy, felt it in the elbow, found a better setup...">${esc(res.comment)}</textarea>`);
-  $('st-done').onclick = () => { res.status = res.status === 'done' ? null : 'done'; renderCard(); };
-  $('st-skip').onclick = () => { res.status = res.status === 'skipped' ? null : 'skipped'; renderCard(); };
-  $('in-actual').oninput = (e) => { res.actual = e.target.value; };
-  $('in-comment').oninput = (e) => { res.comment = e.target.value; };
+        <button id="t-plus">+10s</button>
+      </div>
+    </div>`);
+  const t = { target, left: target, onDone };
+  $('t-start').onclick = () => startTimer(t);
+  $('t-stop').onclick = () => stopTimer();
+  $('t-plus').onclick = () => {
+    t.left += 10; t.target += 10;
+    $('timer-d').textContent = fmtTime(t.left);
+  };
+  if (autostart) startTimer(t);
 }
-function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
-
-/* ---------- timer ---------- */
 function fmtTime(s) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
-function stopTimer() { if (timerInt) { clearInterval(timerInt); timerInt = null; } const d = $('timer-d'); if (d) d.classList.remove('running'); }
-function startTimer(target) {
+function stopTimer() {
+  if (timerInt) { clearInterval(timerInt); timerInt = null; }
+  const d = $('timer-d'); if (d) d.classList.remove('running');
+}
+function startTimer(t) {
   stopTimer();
-  let left = target;
   const d = $('timer-d');
   if (!d) return;
   d.classList.remove('zero'); d.classList.add('running');
-  d.textContent = fmtTime(left);
+  d.textContent = fmtTime(t.left);
   timerInt = setInterval(() => {
-    left--;
-    if (!$('timer-d')) { stopTimer(); return; }
-    $('timer-d').textContent = fmtTime(Math.max(left, 0));
-    if (left <= 0) {
+    t.left--;
+    const dd = $('timer-d');
+    if (!dd) { stopTimer(); return; }
+    dd.textContent = fmtTime(Math.max(t.left, 0));
+    if (t.left <= 0) {
       stopTimer();
-      $('timer-d').classList.add('zero');
+      dd.classList.add('zero');
       if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       beep();
+      if (t.onDone) t.onDone();
     }
   }, 1000);
 }
@@ -258,14 +295,10 @@ function beep() {
   } catch {}
 }
 
-/* ---------- navigation ---------- */
-$('btn-prev').onclick = () => { if (state.idx > 0) { state.idx--; renderCard(); } };
-$('btn-next').onclick = () => {
-  if (state.idx < state.workout.exercises.length - 1) { state.idx++; renderCard(); }
-  else { stopTimer(); show('finish'); }
-};
+/* ---------- header nav ---------- */
 $('btn-exit').onclick = () => { stopTimer(); loadPick(); };
-$('btn-back').onclick = () => { show('player'); renderCard(); };
+$('btn-back').onclick = () => { show('player'); render(); };
+$('btn-prev-step').onclick = () => goBack();
 
 /* ---------- finish + save ---------- */
 $('pain-none').onclick = () => { state.pain = 'none'; $('pain-none').classList.add('sel'); $('pain-some').classList.remove('sel'); $('pain-text').hidden = true; };
@@ -281,11 +314,11 @@ $('btn-save').onclick = async () => {
       captured: new Date().toISOString(),
       source: 'workout-player',
       pain: state.pain === 'none' ? 'none' : ($('pain-text').value.trim() || 'unspecified'),
-      entries: state.results.map(r => ({
+      entries: state.results.map((r, i) => ({
         name: r.name,
-        ...(r.status ? { status: r.status } : {}),
-        ...(r.setsDone ? { 'sets-done': r.setsDone } : {}),
-        ...(r.actual ? { actual: r.actual } : {}),
+        unit: exMeta(state.workout.exercises[i]).unit,
+        sets: r.sets,
+        ...(r.sets.every(s => s == null) ? { status: 'skipped' } : {}),
         ...(r.comment ? { comment: r.comment } : {}),
       })),
       notes: $('overall-notes').value.trim(),
