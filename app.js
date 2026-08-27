@@ -201,12 +201,23 @@ function renderWork(entry, m) {
     if (info.dos) det += `<div class="sec-h">Do</div><ul class="dos">${li(info.dos)}</ul>`;
     if (info.donts) det += `<div class="sec-h">Don't</div><ul class="donts">${li(info.donts)}</ul>`;
     if (info.notes) det += `<div class="ex-notes">${fmtText(info.notes)}</div>`;
-    if (info.video && /^https:\/\//.test(String(info.video)))
-      det += `<a class="video" href="${esc(info.video)}" target="_blank" rel="noopener">\u25b6 Watch demo video</a>`;
+    const vid = String(info.video || '').match(/[?&]v=([\w-]{11})/);
+    if (vid)
+      det += `<div class="yt" data-id="${vid[1]}">
+          <img src="https://i.ytimg.com/vi/${vid[1]}/hqdefault.jpg" alt="video thumbnail" loading="lazy">
+          <span class="yt-play">\u25b6</span></div>
+        <a class="yt-ext" href="${esc(info.video)}" target="_blank" rel="noopener">open in YouTube \u2197</a>`;
   }
   const hasMedia = info && info.media;
   if (det || hasMedia) {
     add(`<details class="det"><summary>Details${hasMedia ? ' & figure' : ''}</summary>${det}<div class="media-slot"></div></details>`);
+    const yt = card.querySelector('.yt');
+    if (yt) yt.onclick = () => {
+      yt.outerHTML = `<div class="yt playing"><iframe
+        src="https://www.youtube-nocookie.com/embed/${yt.dataset.id}?autoplay=1&playsinline=1&rel=0"
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+        allowfullscreen title="demo video"></iframe></div>`;
+    };
     if (hasMedia) {
       const mm = String(info.media);
       const slot = card.querySelector('.media-slot');
