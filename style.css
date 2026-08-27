@@ -74,10 +74,12 @@ button:disabled { opacity: .45; }
   background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
   padding: 4px 10px; font-size: .9rem;
 }
-.ex-notes { margin-bottom: 10px; color: var(--ink); white-space: pre-wrap; }
+.ex-notes { margin-bottom: 10px; color: var(--ink); }
+.ex-notes p, .personal p { margin-bottom: 8px; }
+.ex-notes p:last-child, .personal p:last-child { margin-bottom: 0; }
 .personal {
   background: var(--personal-bg); border-left: 4px solid var(--personal-line);
-  border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; white-space: pre-wrap;
+  border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
 }
 .personal b { color: var(--warn); }
 .plan-note { color: var(--muted); font-style: italic; margin-bottom: 10px; }

@@ -7,6 +7,11 @@ const $ = (id) => document.getElementById(id);
 const views = ['setup', 'pick', 'player', 'finish'];
 function show(v) { views.forEach(x => $('view-' + x).hidden = (x !== v)); window.scrollTo(0, 0); }
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+// YAML | blocks carry hard 78-col wraps; unwrap them, keep paragraph breaks
+function fmtText(s) {
+  return String(s).trim().split(/\n\s*\n/)
+    .map(p => `<p>${esc(p.replace(/\s*\n\s*/g, ' '))}</p>`).join('');
+}
 
 let token = localStorage.getItem('gh_token') || '';
 let state = null;
@@ -188,8 +193,8 @@ function renderWork(entry, m) {
   let det = '';
   const note = m.p.note || m.p['order-note'];
   if (note) det += `<div class="plan-note">${esc(note)}</div>`;
-  if (info && info.notes) det += `<div class="ex-notes">${esc(info.notes.trim())}</div>`;
-  if (info && info.personal) det += `<div class="personal"><b>You:</b> ${esc(info.personal.trim())}</div>`;
+  if (info && info.notes) det += `<div class="ex-notes">${fmtText(info.notes)}</div>`;
+  if (info && info.personal) det += `<div class="personal"><b>You:</b> ${fmtText(info.personal)}</div>`;
   const hasMedia = info && info.media;
   if (det || hasMedia) {
     add(`<details class="det"><summary>Details${hasMedia ? ' & figure' : ''}</summary>${det}<div class="media-slot"></div></details>`);
