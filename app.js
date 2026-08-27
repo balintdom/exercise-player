@@ -334,6 +334,9 @@ $('btn-save').onclick = async () => {
     await putFile(`feedback/${name}.yaml`, jsyaml.dump(fb, { lineWidth: 78 }),
       `Raw feedback: ${name} (workout-player)`);
     $('save-status').textContent = '✓ Saved to the repo. The agent will process it.';
+    $('btn-back').textContent = 'Back to workout list';
+    $('btn-back').className = 'primary big';
+    $('btn-back').onclick = () => { $('btn-back').textContent = 'Back to exercises'; $('btn-back').className = 'ghost'; $('btn-back').onclick = () => { show('player'); render(); }; $('btn-save').disabled = false; $('save-status').textContent = ''; loadPick(); };
   } catch (e) {
     $('save-status').textContent = 'Save failed: ' + e.message;
     btn.disabled = false;
