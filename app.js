@@ -296,7 +296,10 @@ function beep() {
 }
 
 /* ---------- header nav ---------- */
-$('btn-exit').onclick = () => { stopTimer(); loadPick(); };
+$('btn-exit').onclick = () => {
+  if (!confirm('Quit this session? Unsaved progress will be lost.')) return;
+  stopTimer(); loadPick();
+};
 $('btn-back').onclick = () => { show('player'); render(); };
 $('btn-prev-step').onclick = () => goBack();
 
