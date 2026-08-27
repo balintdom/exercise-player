@@ -5,7 +5,21 @@ const API = `https://api.github.com/repos/${OWNER}/${REPO}`;
 
 const $ = (id) => document.getElementById(id);
 const views = ['setup', 'pick', 'player', 'finish'];
-function show(v) { views.forEach(x => $('view-' + x).hidden = (x !== v)); window.scrollTo(0, 0); }
+function show(v) { views.forEach(x => $('view-' + x).hidden = (x !== v)); window.scrollTo(0, 0); keepAwake(v === 'player'); }
+
+// keep the screen on during a session (rest timers must stay visible)
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && !wakeLock && 'wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !$('view-player').hidden) keepAwake(true);
+});
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
 // YAML | blocks carry hard 78-col wraps; unwrap them, keep paragraph breaks
 function fmtText(s) {
