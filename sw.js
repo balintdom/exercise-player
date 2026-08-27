@@ -1,4 +1,4 @@
-const CACHE = 'workout-player-v9';
+const CACHE = 'workout-player-v10';
 const SHELL = ['./', './index.html', './style.css', './app.js', './js-yaml.min.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

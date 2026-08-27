@@ -208,9 +208,8 @@ function renderWork(entry, m) {
           <span class="yt-play">\u25b6</span></div>
         <a class="yt-ext" href="${esc(info.video)}" target="_blank" rel="noopener">open in YouTube \u2197</a>`;
   }
-  const hasMedia = info && info.media;
-  if (det || hasMedia) {
-    add(`<details class="det"><summary>Details${hasMedia ? ' & figure' : ''}</summary>${det}<div class="media-slot"></div></details>`);
+  if (det) {
+    add(`<details class="det"><summary>Details</summary>${det}</details>`);
     const yt = card.querySelector('.yt');
     if (yt) yt.onclick = () => {
       yt.outerHTML = `<div class="yt playing"><iframe
@@ -218,11 +217,6 @@ function renderWork(entry, m) {
         allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
         allowfullscreen title="demo video"></iframe></div>`;
     };
-    if (hasMedia) {
-      const mm = String(info.media);
-      const slot = card.querySelector('.media-slot');
-      if (mm.endsWith('.svg')) getRaw(`exercises/${mm}`).then(svg => { if (svg) slot.innerHTML = svg; }).catch(() => {});
-    }
   }
 
   // duration work gets its own timer
