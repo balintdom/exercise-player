@@ -11,3 +11,5 @@ personal access token (Contents read/write on that single repo), stored in
 `localStorage`.**
 
 Hosted on GitHub Pages. Install on a phone via "Add to Home Screen".
+
+Icon: fire emoji from [Noto Emoji](https://github.com/googlefonts/noto-emoji) (Apache 2.0).
