@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16161f">
+<title>Workout Player</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app">
+  <section id="view-setup" class="view" hidden>
+    <h1>Workout Player</h1>
+    <p>This app reads your workout plan from the private GitHub repo and saves
+    your session feedback back into it. It needs a fine-grained personal
+    access token.</p>
+    <ol class="small">
+      <li>GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token</li>
+      <li>Repository access: <b>only</b> <code>balintdom/exercise</code></li>
+      <li>Permissions → Repository → <b>Contents: Read and write</b></li>
+    </ol>
+    <input id="token-input" type="password" placeholder="github_pat_..." autocomplete="off">
+    <button id="token-save" class="primary">Save token</button>
+    <p id="setup-error" class="error"></p>
+  </section>
+
+  <section id="view-pick" class="view" hidden>
+    <h1>Workouts</h1>
+    <div id="pick-list"></div>
+    <div class="row">
+      <button id="pick-refresh">Refresh</button>
+      <button id="token-reset" class="ghost">Change token</button>
+    </div>
+  </section>
+
+  <section id="view-player" class="view" hidden>
+    <header id="player-head">
+      <button id="btn-exit" class="ghost">✕</button>
+      <div id="progress"></div>
+      <div id="progress-bar"><div id="progress-fill"></div></div>
+    </header>
+    <div id="card"></div>
+    <footer id="player-nav">
+      <button id="btn-prev">‹ Prev</button>
+      <button id="btn-next" class="primary">Next ›</button>
+    </footer>
+  </section>
+
+  <section id="view-finish" class="view" hidden>
+    <h1>Session done 💪</h1>
+    <label class="lbl">Any pain today? (be honest — this steers the next plan)</label>
+    <div class="row">
+      <button id="pain-none" class="toggle sel">No pain</button>
+      <button id="pain-some" class="toggle">Something hurts</button>
+    </div>
+    <textarea id="pain-text" placeholder="where, when, sharp or ache..." hidden></textarea>
+    <label class="lbl">Overall session comment</label>
+    <textarea id="overall-notes" placeholder="how did it go?"></textarea>
+    <button id="btn-save" class="primary big">Save to repo</button>
+    <button id="btn-back" class="ghost">Back to exercises</button>
+    <p id="save-status"></p>
+  </section>
+</main>
+<script src="js-yaml.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
