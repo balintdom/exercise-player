@@ -131,3 +131,17 @@ details.det a.video { display: block; text-align: center; padding: 12px; border-
 .yt-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 2.6rem; color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.8); }
 .yt iframe { width: 100%; height: 100%; border: 0; display: block; }
 .yt-ext { display: block; text-align: right; font-size: .85rem; color: var(--muted); text-decoration: none; margin-top: 4px; }
+
+/* v12: badges, idea overlay, plan view */
+.prog-tag { color: var(--warn); font-weight: 700; }
+.done-tag { color: var(--muted); }
+details.done-list { margin-top: 14px; }
+details.done-list summary { color: var(--muted); cursor: pointer; margin-bottom: 8px; }
+details.done-list .pick-item { opacity: .6; }
+#idea-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 10; padding: 20px; }
+.idea-box { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; width: 100%; max-width: 480px; }
+.plan-item { display: flex; justify-content: space-between; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.plan-form { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.plan-form select, .plan-form input { width: 100%; padding: 12px; margin: 4px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font-size: 1rem; }
+.plan-form .row > * { flex: 1; }
+.plan-form button { width: 100%; margin-top: 6px; }
