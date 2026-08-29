@@ -145,3 +145,4 @@ details.done-list .pick-item { opacity: .6; }
 .plan-form select, .plan-form input { width: 100%; padding: 12px; margin: 4px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font-size: 1rem; }
 .plan-form .row > * { flex: 1; }
 .plan-form button { width: 100%; margin-top: 6px; }
+#idea-overlay[hidden] { display: none; }
