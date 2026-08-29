@@ -197,7 +197,7 @@ async function openWorkout(file) {
     }));
     S = {
       file, workout, exInfo,
-      ei: 0, si: 0, mode: 'work',
+      ei: 0, si: 0, mode: 'ready',
       pain: 'none', painText: '', overall: '',
       appNotes: [], nextWorkouts: [],
       results: (workout.exercises || []).map(e => ({
@@ -214,7 +214,9 @@ async function openWorkout(file) {
 function advance() {
   const exs = S.workout.exercises;
   const m = exMeta(exs[S.ei]);
-  if (S.mode === 'work') {
+  if (S.mode === 'ready') {
+    S.mode = 'work';
+  } else if (S.mode === 'work') {
     S.mode = S.si < m.nSets - 1 ? 'rest' : 'transition';
   } else if (S.mode === 'rest') {
     S.si++; S.mode = 'work';
@@ -226,7 +228,9 @@ function advance() {
   render();
 }
 function goBack() {
+  if (S.mode === 'ready') return;
   if (S.mode !== 'work') { S.mode = 'work'; }
+  else if (S.si === 0 && S.ei === 0) { S.mode = 'ready'; }
   else if (S.si > 0) { S.si--; }
   else if (S.ei > 0) { S.ei--; S.si = exMeta(S.workout.exercises[S.ei]).nSets - 1; }
   persist();
@@ -240,8 +244,23 @@ function render() {
   const m = exMeta(entry);
   $('progress').textContent = `${S.ei + 1} / ${exs.length}`;
   $('progress-fill').style.width = `${((S.ei + (S.si + 1) / m.nSets) / exs.length) * 100}%`;
-  if (S.mode === 'work') renderWork(entry, m);
+  if (S.mode === 'ready') renderReady();
+  else if (S.mode === 'work') renderWork(entry, m);
   else renderRest(entry, m, S.mode);
+}
+
+function renderReady() {
+  const card = $('card');
+  card.innerHTML = '';
+  const auto = { on: true };
+  const first = S.workout.exercises[0];
+  card.insertAdjacentHTML('beforeend',
+    `<h2 class="ex-title">Get ready 🔥</h2>
+     <div class="set-line">first: <b>${esc(first.name.replace(/-/g, ' '))}</b></div>`);
+  addTimer(card, 10, auto, () => { if (auto.on) advance(); }, true,
+    `Go! First: ${first.name.replace(/-/g, ' ')}`);
+  card.insertAdjacentHTML('beforeend', `<button id="btn-go" class="primary big">Start ›</button>`);
+  $('btn-go').onclick = advance;
 }
 
 /* details block for an exercise (used on work cards and rest previews) */
