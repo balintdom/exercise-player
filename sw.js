@@ -1,8 +1,8 @@
-const CACHE = 'workout-player-v13';
+const CACHE = 'workout-player-v14';
 const SHELL = ['./', './index.html', './style.css', './app.js', './js-yaml.min.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(
@@ -16,7 +16,7 @@ self.addEventListener('fetch', (e) => {
   if (url.origin === location.origin) {
     e.respondWith(
       caches.match(e.request).then((hit) => {
-        const net = fetch(e.request).then((res) => {
+        const net = fetch(e.request, { cache: 'no-cache' }).then((res) => {
           if (res.ok) caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
           return res;
         }).catch(() => hit);

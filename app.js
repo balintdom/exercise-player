@@ -385,15 +385,18 @@ function beep() {
 }
 
 /* ---------- app-improvement ideas ---------- */
-$('btn-idea').onclick = () => { $('idea-overlay').hidden = false; $('idea-text').focus(); };
-$('idea-cancel').onclick = () => { $('idea-overlay').hidden = true; $('idea-text').value = ''; };
+// inline style wins over any (possibly stale-cached) CSS
+function ideaShow(on) { const o = $('idea-overlay'); o.hidden = !on; o.style.display = on ? 'flex' : 'none'; }
+ideaShow(false);
+$('btn-idea').onclick = () => { ideaShow(true); $('idea-text').focus(); };
+$('idea-cancel').onclick = () => { ideaShow(false); $('idea-text').value = ''; };
 $('idea-add').onclick = () => {
   const txt = $('idea-text').value.trim();
   if (txt && S) {
     S.appNotes.push({ at: S.workout.exercises[S.ei] ? S.workout.exercises[S.ei].name : '', text: txt });
     persist();
   }
-  $('idea-overlay').hidden = true; $('idea-text').value = '';
+  ideaShow(false); $('idea-text').value = '';
 };
 
 /* ---------- header nav ---------- */
