@@ -160,13 +160,31 @@ function exMeta(entry) {
 
 /* ---------- open / resume workout ---------- */
 async function openWorkout(file) {
+  if ('Notification' in window && Notification.permission === 'default') {
+    try { Notification.requestPermission(); } catch {}
+  }
   const saved = localStorage.getItem(sessionKey(file));
   if (saved) {
-    try {
-      S = JSON.parse(saved);
-      show('player'); render();
-      return;
-    } catch {}
+    const el = $('pick-list');
+    el.innerHTML = `<p><b>${esc(file.replace('.yaml', ''))}</b> has a session in progress.</p>`;
+    const res = document.createElement('button');
+    res.className = 'primary big'; res.textContent = 'Resume';
+    res.onclick = () => {
+      try { S = JSON.parse(saved); show('player'); render(); }
+      catch { localStorage.removeItem(sessionKey(file)); openWorkout(file); }
+    };
+    const rst = document.createElement('button');
+    rst.className = 'big'; rst.textContent = 'Restart from scratch';
+    rst.onclick = () => {
+      if (confirm('Discard the in-progress data and restart this workout?')) {
+        localStorage.removeItem(sessionKey(file)); openWorkout(file);
+      }
+    };
+    const back = document.createElement('button');
+    back.className = 'ghost big'; back.textContent = '‹ Back';
+    back.onclick = () => loadPick();
+    el.append(res, rst, back);
+    return;
   }
   $('pick-list').innerHTML = '<p>Loading workout…</p>';
   try {
@@ -273,8 +291,19 @@ function renderWork(entry, m) {
       (m.target ? ` &nbsp;·&nbsp; target: <b>${esc(m.target)}</b>` : '') + `</div>`);
   const attrs = ['grip', 'depth', 'tempo', 'apparatus'].filter(k => m.p[k]).map(k => `${k}: ${esc(m.p[k])}`);
   if (attrs.length) add(`<div class="attr-line">${attrs.join(' · ')}</div>`);
+  if (S.ei < S.workout.exercises.length - 1)
+    add(`<button id="btn-postpone" class="ghost postpone">↷ Postpone — equipment busy</button>`);
   add(detailsHtml(info, m.p, 'Details'));
   wireYt(card);
+  const pp = $('btn-postpone');
+  if (pp) pp.onclick = () => {
+    const ex = S.workout.exercises.splice(S.ei, 1)[0];
+    const r = S.results.splice(S.ei, 1)[0];
+    S.workout.exercises.splice(S.ei + 1, 0, ex);
+    S.results.splice(S.ei + 1, 0, r);
+    S.si = 0; S.mode = 'work';
+    persist(); render();
+  };
 
   // duration work: timer autostarts, completion prefills + auto-advances
   if (m.workSecs) {
@@ -282,7 +311,7 @@ function renderWork(entry, m) {
       const inp = $('in-num');
       if (inp && !inp.value) { inp.value = m.workSecs; res.sets[S.si] = m.workSecs; persist(); }
       if (auto.on) advance();
-    }, true);
+    }, true, `${entry.name.replace(/-/g, ' ')} — time is up`);
   }
 
   add(`<input id="in-num" type="number" inputmode="numeric" min="0"
@@ -311,7 +340,7 @@ function renderRest(entry, m, mode) {
 
   add(`<h2 class="ex-title">Rest</h2>`);
   add(`<div class="set-line">next: <b>${esc(nextUp)}</b></div>`);
-  addTimer(card, m.restSecs, auto, () => { if (auto.on) advance(); }, true);
+  addTimer(card, m.restSecs, auto, () => { if (auto.on) advance(); }, true, `Rest over — next: ${nextUp}`);
 
   if (mode === 'transition') {
     const res = S.results[S.ei];
@@ -330,7 +359,7 @@ function renderRest(entry, m, mode) {
 }
 
 /* ---------- timer widget ---------- */
-function addTimer(card, target, auto, onDone, autostart) {
+function addTimer(card, target, auto, onDone, autostart, notifyText) {
   card.insertAdjacentHTML('beforeend', `
     <div class="timer-box">
       <div class="timer-display" id="timer-d">${fmtTime(target)}</div>
@@ -340,11 +369,12 @@ function addTimer(card, target, auto, onDone, autostart) {
         <button id="t-plus">+10s</button>
       </div>
     </div>`);
-  const t = { target, left: target, onDone };
+  const t = { target, left: target, onDone, notifyText };
   $('t-start').onclick = () => startTimer(t);
   $('t-stop').onclick = () => { auto.on = false; stopTimer(); };
   $('t-plus').onclick = () => {
     t.left += 10; t.target += 10;
+    if (timerInt && curT === t) t.endAt += 10000;
     $('timer-d').textContent = fmtTime(t.left);
   };
   if (autostart) startTimer(t);
@@ -354,25 +384,38 @@ function stopTimer() {
   if (timerInt) { clearInterval(timerInt); timerInt = null; }
   const d = $('timer-d'); if (d) d.classList.remove('running');
 }
+let curT = null;
 function startTimer(t) {
   stopTimer();
   const d = $('timer-d');
   if (!d) return;
+  curT = t;
+  t.fired = false;
+  t.endAt = Date.now() + t.left * 1000;   // absolute end: survives app switches
   d.classList.remove('zero'); d.classList.add('running');
   d.textContent = fmtTime(t.left);
   timerInt = setInterval(() => {
-    t.left--;
+    t.left = Math.max(0, Math.round((t.endAt - Date.now()) / 1000));
     const dd = $('timer-d');
     if (!dd) { stopTimer(); return; }
-    dd.textContent = fmtTime(Math.max(t.left, 0));
-    if (t.left <= 0) {
+    dd.textContent = fmtTime(t.left);
+    if (t.left <= 0 && !t.fired) {
+      t.fired = true;
       stopTimer();
       dd.classList.add('zero');
       if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       beep();
+      maybeNotify(t.notifyText);
       if (t.onDone) t.onDone();
     }
-  }, 1000);
+  }, 500);
+}
+function maybeNotify(text) {
+  if (!document.hidden) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  navigator.serviceWorker.ready
+    .then(r => r.showNotification('⏱ Timer done', { body: text || '', tag: 'workout-timer', vibrate: [200, 100, 200] }))
+    .catch(() => {});
 }
 function beep() {
   try {

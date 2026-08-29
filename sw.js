@@ -1,4 +1,4 @@
-const CACHE = 'workout-player-v14';
+const CACHE = 'workout-player-v15';
 const SHELL = ['./', './index.html', './style.css', './app.js', './js-yaml.min.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -24,4 +24,10 @@ self.addEventListener('fetch', (e) => {
       })
     );
   }
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(clients.matchAll({ type: 'window' }).then((cs) =>
+    cs.length ? cs[0].focus() : clients.openWindow('./')));
 });

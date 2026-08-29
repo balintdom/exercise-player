@@ -146,3 +146,4 @@ details.done-list .pick-item { opacity: .6; }
 .plan-form .row > * { flex: 1; }
 .plan-form button { width: 100%; margin-top: 6px; }
 #idea-overlay[hidden] { display: none; }
+.postpone { padding: 6px 10px; font-size: .9rem; color: var(--warn); margin-bottom: 4px; }
