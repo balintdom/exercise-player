@@ -103,6 +103,10 @@ async function loadPick() {
       if (localStorage.getItem(doneKey(r.file)) || fbNames.has(r.base)) { r.done = true; return; }
       try { r.done = /^\s+done:/m.test((await getRaw(`workouts/${r.file}`)) || ''); } catch { r.done = false; }
     }));
+    // a done workout can never be in progress — drop stale sessions (e.g. opened by accident)
+    rows.forEach(r => {
+      if (r.done && r.inProgress) { localStorage.removeItem(sessionKey(r.file)); r.inProgress = false; }
+    });
     const today = todayStr();
     const open = rows.filter(r => !r.done).sort((a, b) => a.date.localeCompare(b.date));
     const done = rows.filter(r => r.done).sort((a, b) => b.date.localeCompare(a.date));
@@ -116,7 +120,8 @@ async function loadPick() {
           : (r.date === today ? ' <span class="today-tag">today</span>'
             : (r.date < today ? ' <span class="past">past</span>' : '')));
       b.innerHTML = `<span class="when">${esc(r.date)}${tag}</span><span>${esc(r.place)}</span>`;
-      b.onclick = () => openWorkout(r.file);
+      if (r.done) b.disabled = true;           // done workouts are not openable
+      else b.onclick = () => openWorkout(r.file);
       return b;
     };
     if (!open.length) el.innerHTML = '<p>No planned workouts. Ask the agent to plan one!</p>';
