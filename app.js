@@ -203,7 +203,7 @@ async function openWorkout(file) {
     S = {
       file, workout, exInfo,
       ei: 0, si: 0, mode: 'ready',
-      pain: 'none', painText: '', overall: '',
+      overall: '',
       appNotes: [], nextWorkouts: [],
       results: (workout.exercises || []).map(e => ({
         name: e.name, sets: Array(exMeta(e).nSets).fill(null), comment: '',
@@ -329,6 +329,13 @@ function renderWork(entry, m) {
     persist(); render();
   };
 
+  // max-hold entries get a count-up stopwatch; Stop fills the seconds
+  if (m.unit === 'seconds' && !m.workSecs) {
+    addStopwatch(card, (elapsed) => {
+      const inp = $('in-num');
+      if (inp) { inp.value = elapsed; res.sets[S.si] = elapsed; persist(); }
+    });
+  }
   // duration work: timer autostarts, completion prefills + auto-advances
   if (m.workSecs) {
     addTimer(card, m.workSecs, auto, () => {
@@ -366,6 +373,10 @@ function renderRest(entry, m, mode) {
   add(`<div class="set-line">next: <b>${esc(nextUp)}</b></div>`);
   addTimer(card, m.restSecs, auto, () => { if (auto.on) advance(); }, true, `Rest over — next: ${nextUp}`);
 
+  if (mode === 'rest') {
+    add(detailsHtml(S.exInfo[entry.name], entry.planned, `Details: ${esc(entry.name.replace(/-/g, ' '))}`));
+    wireYt(card);
+  }
   if (mode === 'transition') {
     const res = S.results[S.ei];
     add(`<label class="lbl">Comment on ${esc(entry.name.replace(/-/g, ' '))} (pain, insight — optional)</label>
@@ -404,6 +415,37 @@ function addTimer(card, target, auto, onDone, autostart, notifyText) {
   if (autostart) startTimer(t);
 }
 function fmtTime(s) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+function addStopwatch(card, onStop) {
+  card.insertAdjacentHTML('beforeend', `
+    <div class="timer-box">
+      <div class="lbl" style="margin:0 0 4px">Stopwatch — max hold</div>
+      <div class="timer-display" id="timer-d">0:00</div>
+      <div class="timer-btns">
+        <button id="t-start" class="primary">Start</button>
+        <button id="t-stop">Stop</button>
+      </div>
+    </div>`);
+  let startAt = null;
+  $('t-start').onclick = () => {
+    stopTimer();
+    startAt = Date.now();
+    $('timer-d').classList.add('running');
+    timerInt = setInterval(() => {
+      const dd = $('timer-d');
+      if (!dd) { stopTimer(); return; }
+      dd.textContent = fmtTime(Math.floor((Date.now() - startAt) / 1000));
+    }, 500);
+  };
+  $('t-stop').onclick = () => {
+    if (startAt == null) return;
+    const elapsed = Math.round((Date.now() - startAt) / 1000);
+    stopTimer();
+    $('timer-d').textContent = fmtTime(elapsed);
+    startAt = null;
+    if (navigator.vibrate) navigator.vibrate(150);
+    onStop(elapsed);
+  };
+}
 function stopTimer() {
   if (timerInt) { clearInterval(timerInt); timerInt = null; }
   const d = $('timer-d'); if (d) d.classList.remove('running');
@@ -474,6 +516,7 @@ $('btn-prev-step').onclick = () => goBack();
 async function showPlan() {
   show('plan');
   renderPlanList();
+  $('plan-date').min = todayStr();   // no accidental past dates
   if (!$('plan-place').options.length) {
     try {
       const places = (await gh(`contents/places?ref=${BRANCH}`)) || [];
@@ -482,9 +525,11 @@ async function showPlan() {
         o.value = o.textContent = p.name.replace('.yaml', '');
         $('plan-place').appendChild(o);
       }
+      const o = document.createElement('option');
+      o.value = '__new'; o.textContent = '+ new place…';
+      $('plan-place').appendChild(o);
     } catch {}
   }
-  $('plan-date').value = $('plan-date').value || '';
 }
 function renderPlanList() {
   const el = $('plan-list');
@@ -498,29 +543,28 @@ function renderPlanList() {
     el.appendChild(d);
   });
 }
+$('plan-place').onchange = () => { $('plan-place-new').hidden = $('plan-place').value !== '__new'; };
 $('plan-add').onclick = () => {
+  let place = $('plan-place').value;
+  if (place === '__new') {
+    place = $('plan-place-new').value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (!place) { $('plan-place-new').focus(); return; }
+  }
   const w = {
     date: $('plan-date').value, time: $('plan-time').value || '11:00',
     type: $('plan-type').value, 'length-min': Number($('plan-length').value) || 60,
-    place: $('plan-place').value,
+    place,
   };
   if (!w.date) { $('plan-date').focus(); return; }
   S.nextWorkouts.push(w); persist(); renderPlanList();
 };
 $('plan-back').onclick = () => { show('player'); render(); };
 $('plan-next').onclick = () => {
-  // restore finish view bindings from state
-  if (S.pain === 'some') { $('pain-some').classList.add('sel'); $('pain-none').classList.remove('sel'); $('pain-text').hidden = false; }
-  else { $('pain-none').classList.add('sel'); $('pain-some').classList.remove('sel'); $('pain-text').hidden = true; }
-  $('pain-text').value = S.painText || '';
   $('overall-notes').value = S.overall || '';
   show('finish');
 };
 
 /* ---------- finish + save ---------- */
-$('pain-none').onclick = () => { S.pain = 'none'; persist(); $('pain-none').classList.add('sel'); $('pain-some').classList.remove('sel'); $('pain-text').hidden = true; };
-$('pain-some').onclick = () => { S.pain = 'some'; persist(); $('pain-some').classList.add('sel'); $('pain-none').classList.remove('sel'); $('pain-text').hidden = false; };
-$('pain-text').oninput = (e) => { S.painText = e.target.value; persist(); };
 $('overall-notes').oninput = (e) => { S.overall = e.target.value; persist(); };
 $('btn-back').onclick = () => { showPlan(); };
 
@@ -533,7 +577,6 @@ $('btn-save').onclick = async () => {
       workout: name,
       captured: new Date().toISOString(),
       source: 'workout-player',
-      pain: S.pain === 'none' ? 'none' : (S.painText.trim() || 'unspecified'),
       entries: S.results.map((r, i) => ({
         name: r.name,
         unit: exMeta(S.workout.exercises[i]).unit,

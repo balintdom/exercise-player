@@ -75,6 +75,7 @@
         <input id="plan-length" type="number" inputmode="numeric" placeholder="min" value="60">
         <select id="plan-place"></select>
       </div>
+      <input id="plan-place-new" placeholder="new place name" hidden>
       <button id="plan-add">+ Add workout</button>
     </div>
     <button id="plan-next" class="primary big">Continue ›</button>
@@ -83,12 +84,6 @@
 
   <section id="view-finish" class="view" hidden>
     <h1>Session done 💪</h1>
-    <label class="lbl">Any pain today? (be honest — this steers the next plan)</label>
-    <div class="row">
-      <button id="pain-none" class="toggle sel">No pain</button>
-      <button id="pain-some" class="toggle">Something hurts</button>
-    </div>
-    <textarea id="pain-text" placeholder="where, when, sharp or ache..." hidden></textarea>
     <label class="lbl">Overall session comment</label>
     <textarea id="overall-notes" placeholder="how did it go?"></textarea>
     <button id="btn-save" class="primary big">Save to repo</button>
