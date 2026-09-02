@@ -158,6 +158,8 @@ function exMeta(entry) {
     setWord: twoSides ? 'Side' : 'Set',
     unit: (isDuration || hold) ? 'seconds' : 'reps',
     fillers: Array.isArray(p.fillers) ? p.fillers : [],
+    fillersPerRest: parseInt(p['fillers-per-rest'], 10) || (Array.isArray(p.fillers) ? p.fillers.length : 0),
+    settleSecs: parseMaxSeconds(p.settle),
     workSecs: isDuration ? parseMaxSeconds(p.duration) : 0,
     restSecs: parseMaxSeconds(p.rest) || 5,   // default 5s to breathe/prepare
     target: p.reps != null ? String(p.reps) : (p.duration != null ? String(p.duration) : ''),
@@ -229,8 +231,11 @@ function advance() {
     if (m.fillers.length) { S.mode = 'filler'; S.fi = 0; }
     else { S.si++; S.mode = 'work'; }
   } else if (S.mode === 'filler') {
-    if (S.fi < m.fillers.length - 1) { S.fi++; }
+    if (S.fi < m.fillersPerRest - 1) { S.fi++; }
+    else if (m.settleSecs) { S.mode = 'settle'; }
     else { S.si++; S.mode = 'work'; }
+  } else if (S.mode === 'settle') {
+    S.si++; S.mode = 'work';
   } else { // transition
     if (S.ei < exs.length - 1) { S.ei++; S.si = 0; S.mode = 'work'; }
     else { persist(); stopTimer(); showPlan(); return; }
@@ -258,6 +263,7 @@ function render() {
   if (S.mode === 'ready') renderReady();
   else if (S.mode === 'work') renderWork(entry, m);
   else if (S.mode === 'filler') renderFiller(entry, m);
+  else if (S.mode === 'settle') renderSettle(entry, m);
   else renderRest(entry, m, S.mode);
 }
 
@@ -265,13 +271,13 @@ function renderFiller(entry, m) {
   const card = $('card');
   card.innerHTML = '';
   const auto = { on: true };
-  const f = m.fillers[S.fi] || {};
+  const f = m.fillers[(S.si * m.fillersPerRest + S.fi) % m.fillers.length] || {};
   const info = S.exInfo[f.name];
   const after = `${entry.name.replace(/-/g, ' ')} — set ${S.si + 2} / ${m.nSets}`;
   card.insertAdjacentHTML('beforeend',
     `<span class="phase-chip">filler</span>
      <h2 class="ex-title">${esc(String(f.name || '').replace(/-/g, ' '))}</h2>
-     <div class="set-line">filler ${S.fi + 1} / ${m.fillers.length} · then: <b>${esc(after)}</b></div>`);
+     <div class="set-line">filler ${S.fi + 1} / ${m.fillersPerRest} · then: <b>${esc(after)}</b></div>`);
   if (f.note) card.insertAdjacentHTML('beforeend', `<div class="plan-note">${esc(f.note)}</div>`);
   card.insertAdjacentHTML('beforeend', detailsHtml(info, null, 'Details'));
   wireYt(card);
@@ -419,6 +425,20 @@ function renderRest(entry, m, mode) {
     }
   }
   add(`<button id="btn-go" class="primary big">Next ›</button>`);
+  $('btn-go').onclick = advance;
+}
+
+function renderSettle(entry, m) {
+  const card = $('card');
+  card.innerHTML = '';
+  const auto = { on: true };
+  card.insertAdjacentHTML('beforeend',
+    `<h2 class="ex-title">Get set 🎯</h2>
+     <div class="set-line">next: <b>${esc(entry.name.replace(/-/g, ' '))} — set ${S.si + 2} / ${m.nSets}</b></div>
+     <div class="plan-note">breathe, shake out, step to the bar</div>`);
+  addTimer(card, m.settleSecs, auto, () => { if (auto.on) advance(); }, true,
+    `Go — ${entry.name.replace(/-/g, ' ')} set ${S.si + 2}`);
+  card.insertAdjacentHTML('beforeend', `<button id="btn-go" class="primary big">Next ›</button>`);
   $('btn-go').onclick = advance;
 }
 
